@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=80.9.0", "wheel>=0.38.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jamm"
+version = "0.8.0"
+description = "Jamm API Python SDK"
+readme = "README.md"
+authors = [
+    {name = "Jamm Team"}
+]
+requires-python = ">=3.9"
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # The generated protos under lib/ import google.api.* and protoc_gen_openapiv2.*
+    # at module load, so both are runtime requirements, not build-time ones. Inside
+    # the api container they happen to be present; a plain `pip install jamm` has to
+    # pull them in or importing the package raises ModuleNotFoundError.
+    "googleapis-common-protos>=1.65.0",
+    "grpcio>=1.73.0",
+    "protobuf>=6.31.1",
+    "protoc-gen-openapiv2>=0.0.1",
+    "pydantic>=2.11.7,<2.12.0",
+    "requests>=2.32.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "flake8>=6.0.0",
+    "types-protobuf>=5.29.0",
+    "types-requests>=2.32.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
+    "Faker>=37.4.0",
+]
+
+[project.urls]
+"Homepage" = "https://jamm-pay.jp"
+"Bug Tracker" = "https://jamm-pay.jp"
+"Documentation" = "https://docs.jamm.pay/sdk/python"
+"Source" = "https://jamm-pay.jp"
+
+# `lib` carries the generated protos that jamm.models and jamm.types import as
+# top-level `lib.proto.*`, so it has to ship alongside `jamm` -- listing only
+# ["jamm"] built a wheel that raised ModuleNotFoundError on import. Its
+# subdirectories have no __init__.py (PEP 420 namespace packages), which is why
+# discovery needs namespaces = true.
+[tool.setuptools.packages.find]
+include = ["jamm*", "lib*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"jamm" = ["py.typed", "*.pyi", "**/*.pyi"]
+"lib" = ["*.pyi", "**/*.pyi"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+
+# Ruff is not run by `make lint` (that is black + flake8); this section exists so the
+# review tooling that does run Ruff evaluates these directories correctly rather than
+# reporting the same false positives on every PR.
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint.per-file-ignores]
+# PT009/PT027 ("use a plain assert" / "use pytest.raises") assume a pytest test. These
+# are unittest.TestCase suites executed by unittest.TextTestRunner via
+# test.e2e/run_tests.py -- pytest never collects them (testpaths = ["tests"]).
+# unittest's own assertions are correct there, and pytest.raises would report a
+# no-exception case as an ERROR rather than a FAILURE under that runner.
+"test.e2e/*" = ["PT009", "PT027"]
+# Same reason: a unittest.TestCase that happens to live in the pytest directory.
+"tests/test_webhook_verify_and_parse.py" = ["PT009", "PT027"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --cov=jamm --cov-report=term-missing"
