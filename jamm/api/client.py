@@ -1,5 +1,6 @@
 import re
 import time
+import datetime
 import logging
 import requests
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, Callable
@@ -9,7 +10,42 @@ from google.protobuf.message import Message
 
 from ..mode import Mode
 from ..version import VERSION
+from ..apiversion import API_VERSION
 from ..errors import ApiError as LegacyApiError
+
+API_VERSION_HEADER = "Jamm-API-Version"
+
+
+def resolve_api_version(api_version: Optional[str]) -> str:
+    """Validate a caller-chosen API version, defaulting to the one this SDK was built for."""
+    if not api_version:
+        return API_VERSION
+    try:
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", api_version):
+            raise ValueError
+        datetime.date.fromisoformat(api_version)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f'invalid api_version "{api_version}": expected YYYY-MM-DD'
+        ) from None
+    if api_version > API_VERSION:
+        raise ValueError(
+            f"api_version {api_version} is newer than this SDK supports "
+            f"({API_VERSION}); upgrade the SDK to use it"
+        )
+    return api_version
+
+
+def set_api_version_header(headers: Dict[str, Any], api_version: str) -> None:
+    """Set the version header last, dropping case variants a caller may have added.
+
+    requests folds headers case-insensitively keeping the LAST key, so a stray
+    "jamm-api-version" would otherwise win on the wire.
+    """
+    for name in [k for k in headers if k.lower() == API_VERSION_HEADER.lower()]:
+        del headers[name]
+    headers[API_VERSION_HEADER] = api_version
+
 
 # Merchant IDs the backend accepts, e.g. "mer-abc123". Matched with fullmatch, not
 # match: `$` also matches just before a single trailing newline, so an anchored `match`
@@ -202,10 +238,12 @@ class Configuration:
         host: str = "api.develop.jamm-pay.jp",
         scheme: str = "https",
         mode: Mode = Mode.MERCHANT,
+        api_version: Optional[str] = None,
     ):
         self.host = host
         self.scheme = scheme
         self.mode = mode
+        self.api_version = resolve_api_version(api_version)
         self.timeout = (30, 90)  # (connect timeout, read timeout)
         self.verify_ssl = True
         self.verify_ssl_host = True
@@ -240,7 +278,7 @@ class ApiClient:
             # Lets the backend track SDK version usage per merchant. Every service call
             # goes through this client, so the header belongs here rather than only on
             # the legacy HTTPClient, which no SDK call routes through any more.
-            "X-SDK-Version": f"python:{VERSION}",
+            "Jamm-SDK-Version": f"python:{VERSION}",
         }
         self.session = requests.Session()
         self.request_interceptors: List[RequestInterceptor] = []
@@ -375,6 +413,10 @@ class ApiClient:
                 http_method, url, header_params, query_params, body
             )
         )
+
+        # Last word on the API version: a caller's header_params or a request
+        # interceptor must not be able to pin a different one than was configured.
+        set_api_version_header(header_params, self.config.api_version)
 
         # Retry logic
         return self._execute_with_retry(

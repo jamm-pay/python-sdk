@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import re
 from collections.abc import Mapping
 from typing import Any, Dict, Optional, Union
 
@@ -22,6 +23,35 @@ class InvalidSignatureError(Exception):
 # enum fields arrive as their integer wire value while the REST API returns the string
 # constant. Coerce integers to the string form so both transports read alike, matching
 # the Ruby SDK.
+
+
+# Safe because protojson never emits consecutive capitals: APIVersion would
+# split to a_p_i_version.
+_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+
+# The merchant's own map: rewriting orderRef to order_ref would corrupt it.
+_VERBATIM_KEYS = frozenset({"metadata"})
+
+
+def _to_snake_keys(value: Any) -> Any:
+    """Rewrite camelCase keys to snake_case so either wire shape parses.
+
+    A cut moves payloads to camelCase; the SDK cannot ask which is coming.
+    """
+    if isinstance(value, list):
+        return [_to_snake_keys(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    # Both spellings of one field cannot arrive together; last would win.
+    out = {}
+    for key, nested in value.items():
+        if not isinstance(key, str):
+            out[key] = nested
+            continue
+        snake = _CAMEL_BOUNDARY.sub("_", key).lower()
+        out[snake] = nested if snake in _VERBATIM_KEYS else _to_snake_keys(nested)
+    return out
 
 
 def _coerce_enum(enum, value: Any) -> Any:
@@ -109,25 +139,26 @@ class RefundInfo(_RawDataMapping):
         return f"RefundInfo(id={self.id}, amount_refunded={self.amount_refunded})"
 
 
-class WebhookMessage:
+class WebhookMessage(_RawDataMapping):
     """Represents a parsed webhook message (equivalent to MerchantWebhookMessage)"""
 
     def __init__(self, data: Dict[str, Any]):
+        super().__init__(data)
         self.id = data.get("id")
         self.signature = data.get("signature")
         self.created_at = data.get("created_at")
         self.event_type = _coerce_enum(types.EventType, data.get("event_type"))
         self.content = data.get("content", {})  # Will be replaced by parse() method
-        self._raw_data = data
 
     def __repr__(self):
         return f"WebhookMessage(id={self.id}, event_type={self.event_type})"
 
 
-class ChargeMessage:
+class ChargeMessage(_RawDataMapping):
     """Represents a charge webhook message content (equivalent to ChargeMessage)"""
 
     def __init__(self, data: Dict[str, Any]):
+        super().__init__(data)
         self.id = data.get("id")
         self.customer = data.get("customer")
         self.status = _coerce_enum(types.ChargeMessageStatus, data.get("status"))
@@ -170,38 +201,46 @@ class ChargeMessage:
             types.ChargeMessageApiSource, data.get("api_source")
         )
 
-        self._raw_data = data
+        # The merchant's own map from charge creation. Always a dict — the backend
+        # omits the key when empty.
+        metadata = data.get("metadata")
+        self.metadata = metadata if isinstance(metadata, dict) else {}
 
     def __repr__(self):
         return f"ChargeMessage(id={self.id}, amount={self.final_amount})"
 
 
-class ContractMessage:
+class ContractMessage(_RawDataMapping):
     """Represents a contract webhook message content"""
 
     def __init__(self, data: Dict[str, Any]):
+        super().__init__(data)
         self.customer = data.get("customer")
         self.created_at = data.get("created_at")
         self.activated_at = data.get("activated_at")
         self.merchant_name = data.get("merchant_name")
-        self._raw_data = data
 
     def __repr__(self):
         return f"ContractMessage(customer={self.customer})"
 
 
-class UserAccountMessage:
+class UserAccountMessage(_RawDataMapping):
     """Represents a user account webhook message content"""
 
     def __init__(self, data: Dict[str, Any]):
+        super().__init__(data)
         self.customer = data.get("customer")
         self.email = data.get("email")
         self.deleted_at = data.get("deleted_at")
         self.merchant_name = data.get("merchant_name")
-        self._raw_data = data
 
     def __repr__(self):
         return f"UserAccountMessage(customer={self.customer})"
+
+
+# Attribute names ChargeMessage reads off the payload, derived from the class so a new
+# field cannot fall out of sync with this set.
+_CHARGE_FIELDS = frozenset(vars(ChargeMessage({}))) - {"_raw_data"}
 
 
 # Event types routed to each content class. Names are compared through
@@ -250,6 +289,8 @@ class Webhook:
         if isinstance(webhook_data, str):
             webhook_data = json.loads(webhook_data)
 
+        webhook_data = _to_snake_keys(webhook_data)
+
         # Create the main webhook message
         out = WebhookMessage(webhook_data)
 
@@ -297,68 +338,36 @@ class Webhook:
         if not isinstance(transaction, dict):
             return {}
 
-        refund = content.get("refund")
-        if refund is None:
-            return transaction
+        # Wrapper siblings are carried over so one this release predates stays reachable,
+        # but never one that shares a ChargeMessage field name: Go omits every optional
+        # field when nil, so a sibling would silently supply charge data the transaction
+        # did not send.
+        extras = {
+            k: v
+            for k, v in content.items()
+            if k != "transaction" and k not in _CHARGE_FIELDS
+        }
+        charge = {**extras, **transaction}
 
-        charge = {**transaction, "refund": refund}
+        # The wrapper's refund is the refund for this event, whatever the transaction says.
+        if "refund" in content:
+            charge["refund"] = content["refund"]
 
+        refund = charge.get("refund")
         if isinstance(refund, dict) and refund.get("id") is not None:
             charge["refund_id"] = refund["id"]
 
         return charge
 
     @staticmethod
-    def verify(data: Dict[str, Any], signature: str, client_secret: str) -> None:
-        """
-        Verify webhook message signature.
-
-        DEPRECATED: prefer :meth:`verify_and_parse`. This method re-serializes `data`
-        via ``json.dumps``, which does not reproduce the backend's HTML-escaping of
-        ``&`` ``<`` ``>``, so it rejects legitimate webhooks whose content contains
-        those characters.
-
-        Args:
-            data: Webhook data to verify
-            signature: Expected signature from webhook headers
-            client_secret: Client secret for verification
-
-        Raises:
-            ValueError: If data or signature is None
-            InvalidSignatureError: If signatures don't match
-        """
-        if data is None:
-            raise ValueError("data cannot be None")
-        if signature is None:
-            raise ValueError("signature cannot be None")
-
-        # Convert the data to JSON string
-        json_string = json.dumps(data, separators=(",", ":"), sort_keys=True)
-
-        # Calculate expected signature
-        digest = hmac.new(
-            client_secret.encode("utf-8"), json_string.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
-        expected = f"sha256={digest}"
-
-        # Return early if signatures match
-        if Webhook.secure_compare(expected, signature):
-            return
-
-        # Raise error if they don't match
-        raise InvalidSignatureError("Digests do not match")
-
-    @staticmethod
     def verify_and_parse(raw_body: str, client_secret: str) -> WebhookMessage:
         """
         Verify the HMAC signature over the exact received bytes and parse, in one step.
 
-        This is the recommended entry point. The backend signs the raw ``content`` bytes it
-        transmits, produced by Go's JSON encoder which HTML-escapes ``&`` ``<`` ``>`` as
-        ``\\u0026`` ``\\u003c`` ``\\u003e``. Re-serializing the parsed content (as
-        :meth:`verify` does via ``json.dumps``) un-escapes those characters and reorders keys,
-        so its digest no longer matches. This method slices the raw ``content`` substring out
-        of ``raw_body`` verbatim and HMACs that.
+        This is the only entry point that verifies. Go's encoder HTML-escapes ``&`` ``<``
+        ``>`` as ``\\u0026`` ``\\u003c`` ``\\u003e`` and emits keys in proto field order, so
+        re-serializing the parsed content yields a different digest. This method slices the
+        raw ``content`` substring out of ``raw_body`` verbatim and HMACs that.
 
         Args:
             raw_body: The raw, unmodified webhook request body (str).

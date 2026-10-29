@@ -4,7 +4,7 @@ Prefers the installed distribution version via importlib.metadata so runtime ref
 the published package. For a source/editable checkout that has not been installed, the
 fallback reads ``[project].version`` straight out of pyproject.toml rather than
 hardcoding a literal -- a hardcoded copy silently drifted two releases behind, and the
-version is reported to the backend on every request via ``X-SDK-Version``.
+version is reported to the backend on every request via ``Jamm-SDK-Version``.
 """
 
 import os

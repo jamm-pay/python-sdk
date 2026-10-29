@@ -1,20 +1,23 @@
 import requests
 from requests.exceptions import RequestException
 
+from ..api.client import resolve_api_version, set_api_version_header
+
 
 class HTTPClient:
     """HTTP client with Protocol Buffer support."""
 
-    def __init__(self, auth_handler, environment):
+    def __init__(self, auth_handler, environment, api_version=None):
         self.auth = auth_handler
         self.environment = environment
+        self.api_version = resolve_api_version(api_version)
         self.session = requests.Session()
 
         # Add default headers
         self.session.headers.update(
             {
                 "User-Agent": f"jamm-sdk-python/{environment.version}",
-                "X-SDK-Version": f"python:{environment.version}",
+                "Jamm-SDK-Version": f"python:{environment.version}",
             }
         )
 
@@ -34,6 +37,7 @@ class HTTPClient:
             request_headers.update(auth_headers)
         if headers:
             request_headers.update(headers)
+        set_api_version_header(request_headers, self.api_version)
 
         try:
             response = self.session.request(

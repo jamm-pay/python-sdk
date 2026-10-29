@@ -65,6 +65,38 @@ sandbox and live:
 or a traceback that captures it — shows `**********` rather than the credential. Read
 the value back with `config.client_secret.get_secret_value()`.
 
+## API version
+
+Every request to the Jamm API carries a `Jamm-API-Version` header. It defaults to
+the dated API version this SDK was built against, exposed as
+`jamm.apiversion.API_VERSION`. To stay on the version you integrated against, pass `api_version` to
+`jamm.configure`:
+
+```python
+client = jamm.configure(
+    client_id="your_client_id",
+    client_secret="your_client_secret",
+    env="production",
+    api_version="2026-08-26",
+)
+```
+
+An empty `api_version` means the built-in version. Any other malformed date, or one newer than it, raises `ValueError`
+at configure time; upgrade the SDK to use a newer API version.
+The API rejects a version it no longer serves; the error lists the versions it does. Responses to a pinned older version follow that version's shape, so fields added since come back empty in this SDK's types.
+
+Every versioned response echoes what served it in two headers:
+`Jamm-API-Version` is the version, and `Jamm-API-Version-Source` is how it was
+chosen: `header` (the version this SDK sent), `pin` (your account's pinned
+version), `default` (no header, and no pin we could read), or `forced` (Jamm
+temporarily served its newest shape, which no dated version describes, so
+`Jamm-API-Version` is omitted). A request rejected before a version is chosen
+carries neither.
+
+OAuth2 token requests are excluded: they go to the identity service, which is
+not versioned.
+
+
 ## Features Overview
 
 | Domain      | Highlights                                                                    |
@@ -270,8 +302,13 @@ authorization check. A value the SDK does not recognize matches no constant.
 
 ### Webhooks
 
-`verify_and_parse` is the recommended entry point: it verifies the HMAC signature over
-the exact received bytes and parses in one step, so verification cannot be skipped.
+`verify_and_parse` is the only entry point that verifies: it checks the HMAC signature
+over the exact received bytes and parses in one step.
+
+`Webhook.parse` is still public and does **not** verify. It parses unverified payloads
+for known event types — it still raises on invalid JSON and on an event type it does not
+recognise, but it checks no signature. Never use its output for a trust decision; reach
+for it only when you have already verified the bytes yourself.
 
 ```python
 message = jamm.Webhook.verify_and_parse(raw_request_body, client_secret)
@@ -282,14 +319,39 @@ if jamm.types.event_type_equals(
     charge = message.content
     print(charge.id, charge.status, charge.refund_id)
     print(charge.refund.amount_refunded, charge.refund.jamm_fee)
+
+    # Your own map from charge creation. Always a dict; `{}` when there is none.
+    for key, value in charge.metadata.items():
+        print(key, value)
 ```
 
 Content is typed per event: `ChargeMessage` for charge and refund events,
 `ContractMessage` for `CONTRACT_ACTIVATED`, and `UserAccountMessage` for
 `USER_ACCOUNT_DELETED`. Refund events arrive as a nested `{transaction, refund}` wrapper
 and are flattened onto `ChargeMessage`, with the refund's `rfd-` id on `refund_id` and
-the details on `refund`. Fields the backend adds in future are ignored rather than
-fatal, and remain reachable on `_raw_data`.
+the details on `refund`.
+
+Fields the backend adds later are never fatal, and do not need an SDK release to be
+readable: every content class is a read-only mapping over its payload.
+
+```python
+charge["a_field_this_release_predates"]   # -> its value; KeyError if absent
+charge.get("maybe_missing")               # -> None if absent
+dict(charge)                              # the content mapping (flattened, for refunds)
+```
+
+For refund events that mapping is the flattened charge, not the `{transaction, refund}`
+wrapper the backend sent.
+
+Attribute access stays strict: `charge.typo` raises `AttributeError` rather than
+returning `None`. Top-level mutation is refused — `charge["x"] = 1` and `del charge["x"]`
+raise `TypeError`, `charge.update(...)` raises `AttributeError`.
+
+That guarantee stops at the top level. Nested values that came from the payload are
+shared, not copied — `dict(charge)` is shallow — so `charge.metadata["k"] = v` succeeds
+and every other reader of that payload sees it. When the charge carried no metadata,
+`charge.metadata` is a fresh `{}` and writes stay local, so a metadata-less charge will
+not show you the difference. Use `copy.deepcopy(dict(charge))` to edit nested values.
 
 ### Banking Operations
 

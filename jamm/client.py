@@ -3,7 +3,11 @@ from .config.settings import ClientConfig
 from .mode import Mode
 from .http.client import HTTPClient
 from .environment.env import Environment
-from .api.client import ApiClient, Configuration as ApiConfiguration
+from .api.client import (
+    ApiClient,
+    Configuration as ApiConfiguration,
+    resolve_api_version,
+)
 from .customer import Customer
 from .contract import Contract
 from .charge import Charge
@@ -22,6 +26,7 @@ class JammClient:
         client_secret=None,
         env=None,
         platform=None,
+        api_version=None,
     ):
         """
         Initialize the Jamm client
@@ -34,7 +39,11 @@ class JammClient:
             platform: Enable platform mode (overrides config value). Platform mode
                 authenticates against the platform identity service and lets each
                 operation take a `merchant` argument. Requires platform credentials.
+            api_version: Jamm API version (YYYY-MM-DD) to request. Defaults to the
+                version this SDK was built for; older ones are allowed, newer are not.
         """
+        api_version = resolve_api_version(api_version)
+
         # Initialize configuration
         self.config = config or ClientConfig()
 
@@ -61,10 +70,12 @@ class JammClient:
         # Legacy HTTP client. No SDK call routes through it any more -- it is kept only
         # for callers reaching an endpoint the SDK does not wrap yet, and it skips the
         # retry and interceptor plumbing every service call gets.
-        self.http = HTTPClient(self.auth, self.environment)
+        self.http = HTTPClient(self.auth, self.environment, api_version)
 
         # Initialize API client
-        api_config = ApiConfiguration(host=self.environment.api_host, mode=self.mode)
+        api_config = ApiConfiguration(
+            host=self.environment.api_host, mode=self.mode, api_version=api_version
+        )
         api_config.verify_ssl = self.environment.verify_ssl
         self.api_client = ApiClient(api_config)
 
@@ -81,7 +92,9 @@ class JammClient:
         return Mode.PLATFORM if self.config.platform else Mode.MERCHANT
 
     @classmethod
-    def configure(cls, client_id, client_secret, env="production", platform=None):
+    def configure(
+        cls, client_id, client_secret, env="production", platform=None, api_version=None
+    ):
         """
         Configure and create a new client instance
 
@@ -92,6 +105,7 @@ class JammClient:
             platform: Enable platform mode (requires platform credentials). Defaults to
                 None, meaning "not specified" -- the JAMM_PLATFORM environment variable
                 decides. A literal False forces merchant mode and overrides it.
+            api_version: Jamm API version (YYYY-MM-DD) to request; see __init__.
 
         Returns:
             Configured JammClient instance
@@ -101,6 +115,7 @@ class JammClient:
             client_secret=client_secret,
             env=env,
             platform=platform,
+            api_version=api_version,
         )
 
     def healthcheck(self, merchant=None):

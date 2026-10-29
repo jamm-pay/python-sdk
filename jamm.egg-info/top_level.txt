@@ -1,2 +1,0 @@
-jamm
-lib

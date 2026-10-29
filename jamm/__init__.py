@@ -49,6 +49,7 @@ def configure(
     client_id: str,
     client_secret: str,
     platform: Optional[bool] = None,
+    api_version: Optional[str] = None,
 ):
     """Configure and return a JammClient instance
 
@@ -61,8 +62,14 @@ def configure(
             platform credentials. Defaults to None, meaning "not specified", so the
             JAMM_PLATFORM environment variable decides; a literal False forces merchant
             mode regardless of the environment.
+        api_version: Jamm API version (YYYY-MM-DD) every request asks for. Defaults
+            to the version this SDK was built for (`jamm.apiversion.API_VERSION`).
+            Older versions are allowed; a newer one raises ValueError -- upgrade the
+            SDK instead.
     """
-    return JammClient.configure(client_id, client_secret, env, platform=platform)
+    return JammClient.configure(
+        client_id, client_secret, env, platform=platform, api_version=api_version
+    )
 
 
 # Main public API - high-level classes

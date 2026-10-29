@@ -262,7 +262,7 @@ class PaymentServiceServicer(object):
 
         **Service function reference:**
         ```go
-        func (s *paymentService) Withdraw(ctx context.Context, req *WithdrawRequest) (*WithdrawResponse, error) {
+        func (s *paymentService) OffSessionPayment(ctx context.Context, req *OffSessionPaymentRequest) (*OffSessionPaymentResponse, error) {
         // Validates payment information
         // Processes the payment immediately without redirects
         // Returns charge result and customer information
@@ -276,12 +276,14 @@ class PaymentServiceServicer(object):
     def OnSessionPayment(self, request, context):
         """## OnSessionPayment
 
-        Provides a unified interface for creating payment sessions. This API intelligently routes
-        requests to the appropriate method based on the provided parameters:
+        Provides a unified interface for creating payment sessions. This API routes
+        requests based on the provided parameters:
 
-        - When a customer ID is provided: Uses AddCharge for existing customers
-        - When buyer + charge are provided: Uses CreateContractWithCharge for new customers with charges
-        - When only buyer is provided: Uses CreateContractWithoutCharge for new customers without charges
+        - Customer ID with an active contract: charges that customer
+        - Customer ID without an active contract: the buyer re-approves a new contract
+        for that same customer; a charge is attached when provided
+        - Buyer + charge (no customer ID): creates a contract with charge
+        - Buyer only: creates a contract without charge
 
         **Parameters:**
         - OnSessionPaymentRequest: Contains optional customer/buyer info, optional charge details, and redirect URLs
@@ -293,7 +295,7 @@ class PaymentServiceServicer(object):
         ```go
         func (s *paymentService) OnSessionPayment(ctx context.Context, req *OnSessionPaymentRequest) (*OnSessionPaymentResponse, error) {
         // Determines appropriate payment strategy based on request parameters
-        // Routes to AddCharge, CreateContractWithCharge, CreateContractWithoutCharge, or OneTimeCharge
+        // Routes to managed charge, contract creation, or one-time charge
         // Returns standardized response with payment link and relevant details
         }
         ```

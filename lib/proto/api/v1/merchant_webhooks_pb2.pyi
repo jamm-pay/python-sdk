@@ -50,18 +50,20 @@ class MessageRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class MessageResponse(_message.Message):
-    __slots__ = ("merchant_webhook_message", "charge_message", "contract_message", "user_account_message", "refund_info")
+    __slots__ = ("merchant_webhook_message", "charge_message", "contract_message", "user_account_message", "refund_info", "refund_webhook_content")
     MERCHANT_WEBHOOK_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     CHARGE_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     CONTRACT_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     USER_ACCOUNT_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     REFUND_INFO_FIELD_NUMBER: _ClassVar[int]
+    REFUND_WEBHOOK_CONTENT_FIELD_NUMBER: _ClassVar[int]
     merchant_webhook_message: MerchantWebhookMessage
     charge_message: ChargeMessage
     contract_message: ContractMessage
     user_account_message: UserAccountMessage
     refund_info: RefundInfo
-    def __init__(self, merchant_webhook_message: _Optional[_Union[MerchantWebhookMessage, _Mapping]] = ..., charge_message: _Optional[_Union[ChargeMessage, _Mapping]] = ..., contract_message: _Optional[_Union[ContractMessage, _Mapping]] = ..., user_account_message: _Optional[_Union[UserAccountMessage, _Mapping]] = ..., refund_info: _Optional[_Union[RefundInfo, _Mapping]] = ...) -> None: ...
+    refund_webhook_content: RefundWebhookContent
+    def __init__(self, merchant_webhook_message: _Optional[_Union[MerchantWebhookMessage, _Mapping]] = ..., charge_message: _Optional[_Union[ChargeMessage, _Mapping]] = ..., contract_message: _Optional[_Union[ContractMessage, _Mapping]] = ..., user_account_message: _Optional[_Union[UserAccountMessage, _Mapping]] = ..., refund_info: _Optional[_Union[RefundInfo, _Mapping]] = ..., refund_webhook_content: _Optional[_Union[RefundWebhookContent, _Mapping]] = ...) -> None: ...
 
 class MerchantWebhookMessage(_message.Message):
     __slots__ = ("id", "signature", "event_type", "content", "created_at")
@@ -78,7 +80,7 @@ class MerchantWebhookMessage(_message.Message):
     def __init__(self, id: _Optional[str] = ..., signature: _Optional[str] = ..., event_type: _Optional[_Union[EventType, str]] = ..., content: _Optional[_Union[_any_pb2.Any, _Mapping]] = ..., created_at: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class ChargeMessage(_message.Message):
-    __slots__ = ("id", "customer", "status", "description", "merchant_name", "initial_amount", "discount", "final_amount", "amount_refunded", "currency", "processed_at", "jamm_fee", "created_at", "updated_at", "original_transaction_jamm_fee", "consumption_tax", "error", "refund_id", "refund", "api_source")
+    __slots__ = ("id", "customer", "status", "description", "merchant_name", "initial_amount", "discount", "final_amount", "amount_refunded", "currency", "processed_at", "jamm_fee", "created_at", "updated_at", "original_transaction_jamm_fee", "consumption_tax", "error", "refund_id", "refund", "api_source", "metadata")
     class Status(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         STATUS_UNSPECIFIED: _ClassVar[ChargeMessage.Status]
@@ -105,6 +107,13 @@ class ChargeMessage(_message.Message):
     API_SOURCE_OFF_SESSION_SYNC: ChargeMessage.ApiSource
     API_SOURCE_OFF_SESSION_ASYNC: ChargeMessage.ApiSource
     API_SOURCE_ON_SESSION: ChargeMessage.ApiSource
+    class MetadataEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     ID_FIELD_NUMBER: _ClassVar[int]
     CUSTOMER_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
@@ -125,6 +134,7 @@ class ChargeMessage(_message.Message):
     REFUND_ID_FIELD_NUMBER: _ClassVar[int]
     REFUND_FIELD_NUMBER: _ClassVar[int]
     API_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
     id: str
     customer: str
     status: ChargeMessage.Status
@@ -145,7 +155,8 @@ class ChargeMessage(_message.Message):
     refund_id: str
     refund: RefundInfo
     api_source: ChargeMessage.ApiSource
-    def __init__(self, id: _Optional[str] = ..., customer: _Optional[str] = ..., status: _Optional[_Union[ChargeMessage.Status, str]] = ..., description: _Optional[str] = ..., merchant_name: _Optional[str] = ..., initial_amount: _Optional[int] = ..., discount: _Optional[int] = ..., final_amount: _Optional[int] = ..., amount_refunded: _Optional[int] = ..., currency: _Optional[str] = ..., processed_at: _Optional[str] = ..., jamm_fee: _Optional[int] = ..., created_at: _Optional[str] = ..., updated_at: _Optional[str] = ..., original_transaction_jamm_fee: _Optional[str] = ..., consumption_tax: _Optional[int] = ..., error: _Optional[_Union[Error, _Mapping]] = ..., refund_id: _Optional[str] = ..., refund: _Optional[_Union[RefundInfo, _Mapping]] = ..., api_source: _Optional[_Union[ChargeMessage.ApiSource, str]] = ...) -> None: ...
+    metadata: _containers.ScalarMap[str, str]
+    def __init__(self, id: _Optional[str] = ..., customer: _Optional[str] = ..., status: _Optional[_Union[ChargeMessage.Status, str]] = ..., description: _Optional[str] = ..., merchant_name: _Optional[str] = ..., initial_amount: _Optional[int] = ..., discount: _Optional[int] = ..., final_amount: _Optional[int] = ..., amount_refunded: _Optional[int] = ..., currency: _Optional[str] = ..., processed_at: _Optional[str] = ..., jamm_fee: _Optional[int] = ..., created_at: _Optional[str] = ..., updated_at: _Optional[str] = ..., original_transaction_jamm_fee: _Optional[str] = ..., consumption_tax: _Optional[int] = ..., error: _Optional[_Union[Error, _Mapping]] = ..., refund_id: _Optional[str] = ..., refund: _Optional[_Union[RefundInfo, _Mapping]] = ..., api_source: _Optional[_Union[ChargeMessage.ApiSource, str]] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class RefundInfo(_message.Message):
     __slots__ = ("id", "amount_refunded", "jamm_fee", "consumption_tax", "original_transaction_fee_waived", "error", "processed_at")
@@ -176,6 +187,14 @@ class ContractMessage(_message.Message):
     activated_at: str
     merchant_name: str
     def __init__(self, customer: _Optional[str] = ..., created_at: _Optional[str] = ..., activated_at: _Optional[str] = ..., merchant_name: _Optional[str] = ...) -> None: ...
+
+class RefundWebhookContent(_message.Message):
+    __slots__ = ("transaction", "refund")
+    TRANSACTION_FIELD_NUMBER: _ClassVar[int]
+    REFUND_FIELD_NUMBER: _ClassVar[int]
+    transaction: ChargeMessage
+    refund: RefundInfo
+    def __init__(self, transaction: _Optional[_Union[ChargeMessage, _Mapping]] = ..., refund: _Optional[_Union[RefundInfo, _Mapping]] = ...) -> None: ...
 
 class UserAccountMessage(_message.Message):
     __slots__ = ("customer", "email", "deleted_at", "merchant_name")
