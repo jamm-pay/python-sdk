@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jamm"
-version = "0.9.1"
+version = "0.10.0"
 description = "Jamm API Python SDK"
 readme = "README.md"
 authors = [
@@ -56,9 +56,8 @@ dev = [
 
 [project.urls]
 "Homepage" = "https://jamm-pay.jp"
-"Bug Tracker" = "https://jamm-pay.jp"
-"Documentation" = "https://docs.jamm.pay/sdk/python"
-"Source" = "https://jamm-pay.jp"
+"Source" = "https://github.com/jamm-pay/python-sdk"
+"Bug Tracker" = "https://github.com/jamm-pay/python-sdk/issues"
 
 # `lib` carries the generated protos that jamm.models and jamm.types import as
 # top-level `lib.proto.*`, so it has to ship alongside `jamm` -- listing only

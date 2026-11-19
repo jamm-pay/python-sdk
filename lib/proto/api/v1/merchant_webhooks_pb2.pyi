@@ -159,9 +159,10 @@ class ChargeMessage(_message.Message):
     def __init__(self, id: _Optional[str] = ..., customer: _Optional[str] = ..., status: _Optional[_Union[ChargeMessage.Status, str]] = ..., description: _Optional[str] = ..., merchant_name: _Optional[str] = ..., initial_amount: _Optional[int] = ..., discount: _Optional[int] = ..., final_amount: _Optional[int] = ..., amount_refunded: _Optional[int] = ..., currency: _Optional[str] = ..., processed_at: _Optional[str] = ..., jamm_fee: _Optional[int] = ..., created_at: _Optional[str] = ..., updated_at: _Optional[str] = ..., original_transaction_jamm_fee: _Optional[str] = ..., consumption_tax: _Optional[int] = ..., error: _Optional[_Union[Error, _Mapping]] = ..., refund_id: _Optional[str] = ..., refund: _Optional[_Union[RefundInfo, _Mapping]] = ..., api_source: _Optional[_Union[ChargeMessage.ApiSource, str]] = ..., metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class RefundInfo(_message.Message):
-    __slots__ = ("id", "amount_refunded", "jamm_fee", "consumption_tax", "original_transaction_fee_waived", "error", "processed_at")
+    __slots__ = ("id", "amount_refunded", "amount_refunded_net_discounts", "jamm_fee", "consumption_tax", "original_transaction_fee_waived", "error", "processed_at")
     ID_FIELD_NUMBER: _ClassVar[int]
     AMOUNT_REFUNDED_FIELD_NUMBER: _ClassVar[int]
+    AMOUNT_REFUNDED_NET_DISCOUNTS_FIELD_NUMBER: _ClassVar[int]
     JAMM_FEE_FIELD_NUMBER: _ClassVar[int]
     CONSUMPTION_TAX_FIELD_NUMBER: _ClassVar[int]
     ORIGINAL_TRANSACTION_FEE_WAIVED_FIELD_NUMBER: _ClassVar[int]
@@ -169,12 +170,13 @@ class RefundInfo(_message.Message):
     PROCESSED_AT_FIELD_NUMBER: _ClassVar[int]
     id: str
     amount_refunded: int
+    amount_refunded_net_discounts: int
     jamm_fee: int
     consumption_tax: int
     original_transaction_fee_waived: bool
     error: Error
     processed_at: str
-    def __init__(self, id: _Optional[str] = ..., amount_refunded: _Optional[int] = ..., jamm_fee: _Optional[int] = ..., consumption_tax: _Optional[int] = ..., original_transaction_fee_waived: bool = ..., error: _Optional[_Union[Error, _Mapping]] = ..., processed_at: _Optional[str] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., amount_refunded: _Optional[int] = ..., amount_refunded_net_discounts: _Optional[int] = ..., jamm_fee: _Optional[int] = ..., consumption_tax: _Optional[int] = ..., original_transaction_fee_waived: bool = ..., error: _Optional[_Union[Error, _Mapping]] = ..., processed_at: _Optional[str] = ...) -> None: ...
 
 class ContractMessage(_message.Message):
     __slots__ = ("customer", "created_at", "activated_at", "merchant_name")

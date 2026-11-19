@@ -1,6 +1,8 @@
 include README.md
 include LICENSE
 include pyproject.toml
+include CHANGELOG.md
+recursive-include examples *.py *.md
 recursive-include jamm *.py
 recursive-include jamm *.pyi
 recursive-include lib *.py

@@ -19,19 +19,22 @@ def main():
     )
 
     try:
-        # Create contract with charge
-        result = client.contracts.create_with_charge(
+        # A new customer signs up and pays the first charge through the returned link.
+        result = client.payments.on_session(
             buyer=buyer_data,
-            charge={
-                "price": 100,
-                "description": "Initial charge from Python SDK",
-                "expires_at": expires_at,
+            price=100,
+            description="Initial charge from Python SDK",
+            redirect_urls={
+                "success_url": "https://example.com/success",
+                "failure_url": "https://example.com/fail",
             },
-            redirect={
-                "success_url": "https://jamm-pay.jp/success",
-                "failure_url": "https://jamm-pay.jp/fail",
-            },
+            expires_at=expires_at,
         )
+        # Business failures come back in the response, not as an exception.
+        if not result.get("success"):
+            error = result.get("error") or {}
+            print(f"Contract session failed: {error.get('code')} {error.get('message')}")
+            raise SystemExit(1)
         print(json.dumps(result, indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"Error creating contract with charge: {e}")

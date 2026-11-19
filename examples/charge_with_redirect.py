@@ -1,4 +1,4 @@
-"""Create charge with redirect example for Jamm SDK."""
+"""On-session (redirect) charge example for Jamm SDK."""
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -19,16 +19,22 @@ def main():
     )
 
     try:
-        # Create charge with redirect
-        result = client.charges.create_with_redirect(
+        # Returns a payment link to send the customer to.
+        result = client.payments.on_session(
             customer_id=customer_id,
             price=100,
             description="Test charge with redirect from Python SDK",
-            success_url="https://jamm-pay.jp/success",
-            failure_url="https://jamm-pay.jp/fail",
+            redirect_urls={
+                "success_url": "https://example.com/success",
+                "failure_url": "https://example.com/fail",
+            },
             expires_at=expires_at,
-            metadata={"source": "python_example"},
         )
+        # Business failures come back in the response, not as an exception.
+        if not result.get("success"):
+            error = result.get("error") or {}
+            print(f"Payment session failed: {error.get('code')} {error.get('message')}")
+            raise SystemExit(1)
         print(json.dumps(result, indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"Error creating charge with redirect: {e}")

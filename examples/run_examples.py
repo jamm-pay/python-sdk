@@ -97,7 +97,7 @@ def main():
             "export ENV=staging",
             "export MERCHANT_CLIENT_ID=your_client_id",
             "export MERCHANT_CLIENT_SECRET=your_client_secret",
-            "export CUSTOMER=cus-your_customer_id  # Optional",
+            "export CUSTOMER=cus-your_customer_id  # Required by examples that act on an existing customer",
             "export CHARGE=trx-your_charge_id  # Optional, for the refund example",
         ]
 

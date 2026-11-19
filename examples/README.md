@@ -17,9 +17,10 @@ pip install faker  # For generating test data
 export ENV=staging
 export MERCHANT_CLIENT_ID=your_client_id
 export MERCHANT_CLIENT_SECRET=your_client_secret
-export CUSTOMER=cus-your_customer_id  # Optional, for customer-specific examples
+export CUSTOMER=cus-your_customer_id  # Required by examples that act on an existing customer
 export EMAIL=your_test_email@example.com  # Optional
 export CHARGE=trx-your_charge_id  # Optional, for refund.py
+export IDEMPOTENCY_KEY=the_key_printed_before  # Optional, to retry charge_without_redirect.py
 ```
 
 `ENV` selects which Jamm environment the examples run against:
@@ -28,7 +29,6 @@ export CHARGE=trx-your_charge_id  # Optional, for refund.py
 | --- | --- | --- |
 | `staging` | `api.staging.jamm-pay.jp` | The sandbox. Use this one — staging credentials are what an integration is issued alongside production. |
 | `production` | `api.jamm-pay.jp` | Live money. The examples create customers and charges, so point them here only deliberately. |
-| `develop` | `api.develop.jamm-pay.jp` | Jamm's internal environment. No credentials are issued for it outside Jamm. |
 
 For the platform mode example, use platform credentials instead:
 
@@ -45,6 +45,10 @@ export MERCHANT=mer-the_merchant_to_act_for
 ```bash
 python run_examples.py
 ```
+
+Run them against a throwaway sandbox (`ENV=staging`) customer: `customer_update.py` renames
+`CUSTOMER` and replaces its metadata, `charge_without_redirect.py` charges it ¥100, and
+`refund.py` fully refunds `CHARGE` when it is set.
 
 ### Run Specific Categories
 
@@ -69,17 +73,6 @@ python charge_without_redirect.py
 
 ```bash
 python run_examples.py --list
-```
-
-### Using Make
-
-```bash
-make install    # Install dependencies
-make run        # Run all examples
-make health     # Run health check
-make customer   # Run customer examples
-make charge     # Run charge examples
-make contract   # Run contract examples
 ```
 
 ## Examples Overview
@@ -119,6 +112,5 @@ The `helper.py` module provides:
 
 - All examples include proper error handling
 - Test data is generated with realistic Japanese names and addresses
-- Examples follow the same patterns as the Ruby SDK examples
-- Set `CUSTOMER` environment variable to use existing customer for testing
-- Examples clean up after themselves when appropriate
+- Examples that act on an existing customer need `CUSTOMER`; `customer_update.py` changes that customer and does not restore it
+- `customer_delete.py` deletes the customer it creates

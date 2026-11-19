@@ -2,8 +2,8 @@
 
 Platform credentials can call the API on behalf of a merchant. Merchant-scoped
 operations accept a `merchant` argument; it is rejected locally unless the client was
-configured with `platform=True`. The bank and branch lookups are merchant-agnostic
-reference data and take no `merchant`.
+configured with `platform=True`. Bank and branch lookups need merchant credentials and
+are not available in platform mode.
 
 Usage:
     export ENV=staging
@@ -59,9 +59,9 @@ def main():
     print()
 
     try:
-        # Verify connectivity for this merchant's scope.
-        client.healthcheck(merchant=merchant)
-        print(f"Healthcheck ok for {merchant}")
+        # Connectivity only: the healthcheck does not check access to the merchant.
+        client.healthcheck()
+        print("Healthcheck ok")
 
         # Create a payment session on the merchant's behalf.
         result = client.payments.on_session(
@@ -74,6 +74,11 @@ def main():
             },
             merchant=merchant,
         )
+        # Business failures come back in the response, not as an exception.
+        if not result.get("success"):
+            error = result.get("error") or {}
+            print(f"Payment session failed: {error.get('code')} {error.get('message')}")
+            return 1
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except ValueError as e:

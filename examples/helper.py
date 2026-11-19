@@ -34,17 +34,25 @@ class Helper:
             env=os.environ["ENV"],
             client_id=os.environ["MERCHANT_CLIENT_ID"],
             client_secret=os.environ["MERCHANT_CLIENT_SECRET"],
+            platform=False,
         )
 
     @staticmethod
     def email():
         """Get test email address."""
-        return os.environ.get("EMAIL", "python.test@jamm-pay.jp")
+        return os.environ.get("EMAIL", "python.test@example.com")
 
     @staticmethod
     def customer_id():
-        """Get test customer ID from environment."""
-        return os.environ.get("CUSTOMER", "cus-cunap31boodfkalob1kg")
+        """Get the customer ID from the environment; it must be one in your account."""
+        customer_id = os.environ.get("CUSTOMER")
+        if not customer_id:
+            print()
+            print("Please set CUSTOMER to a customer in your account:")
+            print("export CUSTOMER=cus-***")
+            print()
+            sys.exit(1)
+        return customer_id
 
     @staticmethod
     def generate_buyer(base_email: str = None) -> Dict[str, Any]:
@@ -58,7 +66,7 @@ class Helper:
             email_parts = base_email.split("@")
             email = f"{email_parts[0]}+{timestamp}@{email_parts[1]}"
         else:
-            email = f"test+{timestamp}@jamm-pay.jp"
+            email = f"test+{timestamp}@example.com"
 
         return {
             "email": email,

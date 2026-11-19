@@ -9,10 +9,10 @@ Lightweight Python client for the Jamm API. Focused on:
 
 ## Installation
 
-Production (when published):
+From PyPI:
 
 ```bash
-pip install jamm-sdk
+pip install jamm
 ```
 
 Local development (editable):
@@ -39,6 +39,17 @@ print(client.healthcheck())
 
 The SDK can be configured using environment variables or programmatically:
 
+### Environment Variables
+
+`ClientConfig()` reads these when the matching argument is omitted:
+
+| Variable | Setting |
+| --- | --- |
+| `JAMM_CLIENT_ID` | `client_id` |
+| `JAMM_CLIENT_SECRET` | `client_secret` |
+| `JAMM_ENVIRONMENT` | `environment` (default `production`) |
+| `JAMM_PLATFORM` | `platform`: `1`, `true` or `yes` turns it on. `jamm.configure` also uses it when `platform` is omitted. |
+
 ### Programmatic Configuration
 
 ```python
@@ -53,8 +64,8 @@ config = ClientConfig(
 client = JammClient(config)
 ```
 
-`environment` selects the hosts, so it is the only setting needed to move between
-sandbox and live:
+`environment` selects the hosts. Sandbox and live use separate credentials, so change
+`client_id` and `client_secret` with it (webhook signatures are checked with `client_secret` too):
 
 | `environment` | API host | Who it is for |
 | --- | --- | --- |
@@ -102,7 +113,7 @@ not versioned.
 | Domain      | Highlights                                                                    |
 | ----------- | ----------------------------------------------------------------------------- |
 | Healthcheck | Ping connectivity quickly                                                     |
-| Customers   | CRUD + contract; normalized: `link_initialized`, `bank_information`, `status` |
+| Customers   | CRUD + contract; normalized: `linkInitialized`, `bankInformation`, `status`     |
 | Payments    | On-session / off-session async flows                                          |
 | Refunds     | Full, partial, and cancel-only refunds                                        |
 | Contracts   | Fetch existing customer contract                                              |
@@ -146,7 +157,8 @@ print(customer["id"])  # flattened
 customer = client.customers.get("cus-customer_id_here")
 updated = client.customers.update(
     customer_id="cus-customer_id_here",
-    data={"name": "Updated Name", "metadata": {"updated": True}},
+    # metadata values are strings, and the map replaces the customer's existing metadata.
+    data={"name": "Updated Name", "metadata": {"updated": "true"}},
 )
 contract = client.customers.get_contract("cus-customer_id_here")
 delete_result = client.customers.delete("cus-customer_id_here")
@@ -180,31 +192,46 @@ on_session = client.payments.on_session(
     price=1000,
     description="One-time payment",
     redirect_urls={
-        "success_url": "https://yoursite.com/success",
-        "failure_url": "https://yoursite.com/cancel",
+        "success_url": "https://example.com/success",
+        "failure_url": "https://example.com/cancel",
     },
     expires_at=expires_at,
 )
 
+# on_session adds expires_at to the buyer dict it is given, so pass a copy.
 new_customer_session = client.payments.on_session(
-    buyer=buyer_data,
+    buyer=dict(buyer_data),
     redirect_urls={
-        "success_url": "https://yoursite.com/success",
-        "failure_url": "https://yoursite.com/cancel",
+        "success_url": "https://example.com/success",
+        "failure_url": "https://example.com/cancel",
     },
     expires_at=expires_at,
 )
 
 new_customer_with_charge = client.payments.on_session(
-    buyer=buyer_data,
+    buyer=dict(buyer_data),
     price=1000,
     description="Initial payment",
     redirect_urls={
-        "success_url": "https://yoursite.com/success",
-        "failure_url": "https://yoursite.com/cancel",
+        "success_url": "https://example.com/success",
+        "failure_url": "https://example.com/cancel",
     },
     expires_at=expires_at,
 )
+```
+
+`on_session` does not raise for business failures such as an unknown or inactive
+customer. It returns `success` false with an `error`, so check it before using the
+response:
+
+```python
+if not on_session.get("success"):
+    error = on_session.get("error") or {}
+    if jamm.types.on_session_payment_error_code_equals(
+        jamm.types.OnSessionPaymentErrorCode.ON_SESSION_PAYMENT_ERROR_CODE_CUSTOMER_NOT_FOUND,
+        error.get("code"),
+    ):
+        ...
 ```
 
 ### Contract Management
@@ -231,9 +258,11 @@ for c in client.charges.iter(customer_id="cus-customer_id_here", page_size=100, 
 ### Refunds
 
 A refund is always processed asynchronously. A successful response means the request was
-accepted; the outcome arrives by webhook (`refund_succeeded` or `refund_failed`). If the
-same-day cancellation window has not passed the charge is cancelled directly, otherwise a
-bank transfer refund is created.
+accepted; the outcome arrives by webhook (`refund_succeeded` or `refund_failed`). A full
+refund within the same-day cancellation window cancels the charge directly. A partial refund
+(an `amount` below the charge amount), or a full one after that window, creates a bank
+transfer refund. `cancel_only=True` always cancels the whole charge, so don't combine it with
+`amount`. Charges older than 180 days can't be refunded.
 
 ```python
 # Full refund
@@ -250,30 +279,38 @@ client.payments.refund("trx-charge_id_here", cancel_only=True)
 ### Platform Mode
 
 Platform credentials can call the API on behalf of a merchant. Configure with
-`platform=True`, then pass `merchant` to any operation:
+`platform=True`, then pass `merchant` to any merchant-scoped operation. Bank and branch
+lookups need merchant credentials and are not available in platform mode.
 
 ```python
 client = jamm.configure(
-    env="develop",
+    env="staging",
     client_id="your_platform_client_id",
     client_secret="your_platform_client_secret",
     platform=True,
 )
 
-client.healthcheck(merchant="mer-merchant_id_here")
+client.healthcheck()  # connectivity only; it does not check access to a merchant
 client.customers.create(buyer_data, merchant="mer-merchant_id_here")
-client.payments.off_session_async("cus-customer_id_here", 1000, merchant="mer-merchant_id_here")
+client.payments.off_session_async(
+    "cus-customer_id_here",
+    1000,
+    description="Monthly subscription",
+    idempotency_key="order-2026-001",
+    merchant="mer-merchant_id_here",
+)
 client.payments.refund("trx-charge_id_here", merchant="mer-merchant_id_here")
 ```
 
 Platform mode authenticates against a separate identity service, so it requires platform
-credentials — merchant credentials will not work. Passing `merchant` without
-`platform=True`, or with a malformed merchant ID, raises `ValueError` before any request
-is sent.
+credentials — merchant credentials will not work. Passing `merchant` in merchant mode
+(`platform=False`, or `platform` omitted with `JAMM_PLATFORM` unset), or with a malformed
+merchant ID, raises `ValueError` before any request is sent.
 
 ### Enum Constants
 
-Enums arrive as strings over REST and as integers on webhooks. `jamm.types` carries the
+Enums arrive as strings over REST. Webhooks send `event_type` as a string, but enums inside
+`content` (such as `status` and `api_source`) as integers. `jamm.types` carries the
 constants and comparison helpers that bridge the two, so you never hand-write the wire
 strings:
 
@@ -311,7 +348,15 @@ recognise, but it checks no signature. Never use its output for a trust decision
 for it only when you have already verified the bytes yourself.
 
 ```python
-message = jamm.Webhook.verify_and_parse(raw_request_body, client_secret)
+# raw_request_body is the body exactly as received, as bytes (Flask: request.get_data()).
+try:
+    message = jamm.Webhook.verify_and_parse(raw_request_body.decode("utf-8"), client_secret)
+except jamm.InvalidSignatureError:
+    ...  # not from Jamm: reject it and stop
+except ValueError:
+    # Malformed, or an event with no content type in this SDK, such as the
+    # dashboard's test event (EVENT_TYPE_TESTING): acknowledge it and stop.
+    ...
 
 if jamm.types.event_type_equals(
     jamm.types.EventType.EVENT_TYPE_REFUND_SUCCEEDED, message.event_type
@@ -377,35 +422,7 @@ pip install -e .
 
 ### Running Tests
 
-Unit tests (no credentials, no network):
-
-```bash
-python -m pytest tests
-```
-
-End-to-end tests against a live environment:
-
-```bash
-export MERCHANT_CLIENT_ID=your_client_id
-export MERCHANT_CLIENT_SECRET=your_client_secret
-python test.e2e/run_tests.py
-```
-
-There is also a manual walkthrough that exercises every service and prints a report:
-
-```bash
-export MERCHANT_CLIENT_SECRET=your_client_secret
-python test.e2e/manual_smoke.py --client-id YOUR_ID --env staging
-```
-
-Abbreviated example output:
-
-```text
-✅ Healthcheck ok
-✅ Customer created
-✅ Off-session payment created
-✅ On-session payment created
-```
+The unit and end-to-end suites are not published with the SDK. They run in Jamm's CI on every change.
 
 ## Helper: generate_buyer()
 
@@ -420,7 +437,7 @@ def generate_buyer(base_email=None, name=None, force_kyc=False):
     timestamp = int(time.time())
 
     return {
-        "email": f"{fake_en.user_name()}+{timestamp}@jamm-pay.jp",
+        "email": f"{fake_en.user_name()}+{timestamp}@example.com",
         "name": name or fake_en.name(),
         "katakana_last_name": fake_jp.last_kana_name(),
         "katakana_first_name": fake_jp.first_kana_name(),
@@ -438,7 +455,9 @@ customer = client.customers.create(buyer=buyer_data)
 
 ## Error Handling
 
-Every failed SDK call raises `jamm.ApiError`.
+A failed API call raises `jamm.ApiError`, except `payments.on_session`, which reports business
+failures in its response (see Payment Processing). Lookups such as `charges.get` and `contracts.get` return
+`None` on a 404 instead, and invalid arguments raise `ValueError` or `TypeError` before any request is sent.
 
 | Field            | Meaning                                                            |
 | ---------------- | ------------------------------------------------------------------ |
@@ -446,24 +465,28 @@ Every failed SDK call raises `jamm.ApiError`.
 | `message`        | Short description                                                  |
 | `details`        | Parsed JSON body                                                   |
 | `error_type`     | Internal debug enum-like (e.g. `ERROR_TYPE_PAYMENT_CHARGE_FAILED`) |
-| `error_code`     | High-level code (`internal`, `invalid`, etc.)                      |
+| `error_code`     | String code when the error body carries one, otherwise `None`      |
 | `debug_values`   | All collected debug markers                                        |
 | `decoded_values` | Base64-decoded detail values                                       |
 
 ```python
 from jamm import ApiError
 try:
-    client.charges.get("trx-nonexistent")
+    client.payments.refund("trx-nonexistent")
 except ApiError as e:
     print(e.code, e.message, e.error_type)
-    if e.error_code:
+    if getattr(e, "error_code", None):
         print("error_code:", e.error_code)
-    if e.decoded_values:
+    if getattr(e, "decoded_values", None):
         print("decoded:", e.decoded_values)
 ```
 
-Network issues surface with `code == 0` and `details` containing `{"network_error": True}`.
+Network issues surface with `code == 0`, and `details["exception_type"]` names the exception (e.g. `ConnectionError`).
+When the OAuth token request itself fails (for example, wrong credentials), the error carries only
+`code`, `message` and `details`, and `code` can be `None`.
 
-## Notes & Next Steps
+## Feedback
 
-Planned (non-breaking): enum wrapper for `error_type`, helper predicates, optional typed response models. Contributions welcome.
+To report a bug or ask for a feature, open an issue on
+[jamm-pay/python-sdk](https://github.com/jamm-pay/python-sdk/issues). The repository is published from Jamm's
+internal source on each release, so pull requests there can't be merged.

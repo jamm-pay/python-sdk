@@ -13,12 +13,12 @@ def main():
     try:
         buyer_data = Helper.generate_buyer()
         customer = client.customers.create(buyer=buyer_data)
-        customer_id = customer["customer"]["id"]
+        customer_id = customer["id"]
         print(f"Created test customer: {customer_id}")
 
         # Delete the customer
         result = client.customers.delete(customer_id)
-        if result:
+        if result.get("accepted"):
             print(f"Successfully deleted customer: {customer_id}")
         else:
             print(f"Failed to delete customer: {customer_id}")

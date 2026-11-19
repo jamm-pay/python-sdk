@@ -13,14 +13,19 @@ def main():
     buyer_data = Helper.generate_buyer(Helper.email())
 
     try:
-        # Create contract without charge
-        result = client.contracts.create_without_charge(
+        # A new customer signs up through the returned link; no charge is made.
+        result = client.payments.on_session(
             buyer=buyer_data,
-            redirect={
-                "success_url": "https://jamm-pay.jp/success",
-                "failure_url": "https://jamm-pay.jp/fail",
+            redirect_urls={
+                "success_url": "https://example.com/success",
+                "failure_url": "https://example.com/fail",
             },
         )
+        # Business failures come back in the response, not as an exception.
+        if not result.get("success"):
+            error = result.get("error") or {}
+            print(f"Contract session failed: {error.get('code')} {error.get('message')}")
+            raise SystemExit(1)
         print(json.dumps(result, indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"Error creating contract without charge: {e}")

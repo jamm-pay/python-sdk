@@ -24,17 +24,18 @@ def main():
         return
 
     try:
-        # Full refund. If the same-day cancellation window has not passed the charge is
-        # cancelled directly; otherwise a bank transfer refund is created.
+        # Full refund. Within the same-day cancellation window the charge is cancelled
+        # directly; otherwise a bank transfer refund is created.
         result = client.payments.refund(charge_id)
         print("Full refund accepted:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
-        # Partial refund of a fixed amount in JPY:
+        # Partial refund of a fixed amount in JPY; always a bank transfer refund:
         #   client.payments.refund(charge_id, amount=500)
         #
         # Cancel only, without falling back to a bank transfer refund:
         #   client.payments.refund(charge_id, cancel_only=True)
+        # cancel_only always cancels the whole charge; don't combine it with amount.
     except Exception as e:
         print(f"Error refunding charge: {e}")
 

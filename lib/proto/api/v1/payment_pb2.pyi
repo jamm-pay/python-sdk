@@ -38,12 +38,14 @@ ON_SESSION_PAYMENT_ERROR_CODE_INVALID_PAYMENT_STRATEGY: OnSessionPaymentErrorCod
 ON_SESSION_PAYMENT_ERROR_CODE_INTERNAL_ERROR: OnSessionPaymentErrorCode
 
 class OffSessionPaymentRequest(_message.Message):
-    __slots__ = ("customer", "charge")
+    __slots__ = ("customer", "charge", "idempotency_key")
     CUSTOMER_FIELD_NUMBER: _ClassVar[int]
     CHARGE_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
     customer: str
     charge: InitialCharge
-    def __init__(self, customer: _Optional[str] = ..., charge: _Optional[_Union[InitialCharge, _Mapping]] = ...) -> None: ...
+    idempotency_key: str
+    def __init__(self, customer: _Optional[str] = ..., charge: _Optional[_Union[InitialCharge, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class OffSessionPaymentResponse(_message.Message):
     __slots__ = ("customer", "charge")
@@ -106,12 +108,14 @@ class GetChargeResponse(_message.Message):
     def __init__(self, charge: _Optional[_Union[ChargeResult, _Mapping]] = ..., customer: _Optional[_Union[_common_pb2.Customer, _Mapping]] = ...) -> None: ...
 
 class WithdrawRequest(_message.Message):
-    __slots__ = ("customer", "charge")
+    __slots__ = ("customer", "charge", "idempotency_key")
     CUSTOMER_FIELD_NUMBER: _ClassVar[int]
     CHARGE_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
     customer: str
     charge: InitialCharge
-    def __init__(self, customer: _Optional[str] = ..., charge: _Optional[_Union[InitialCharge, _Mapping]] = ...) -> None: ...
+    idempotency_key: str
+    def __init__(self, customer: _Optional[str] = ..., charge: _Optional[_Union[InitialCharge, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class WithdrawResponse(_message.Message):
     __slots__ = ("customer", "charge")
@@ -395,3 +399,9 @@ class RefundResponse(_message.Message):
     charge_id: str
     refund_id: str
     def __init__(self, charge_id: _Optional[str] = ..., refund_id: _Optional[str] = ...) -> None: ...
+
+class ChargePendingDetail(_message.Message):
+    __slots__ = ("charge_id",)
+    CHARGE_ID_FIELD_NUMBER: _ClassVar[int]
+    charge_id: str
+    def __init__(self, charge_id: _Optional[str] = ...) -> None: ...

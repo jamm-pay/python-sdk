@@ -124,6 +124,8 @@ class RefundInfo(_RawDataMapping):
         # External refund identifier (rfd-*).
         self.id = data.get("id")
         self.amount_refunded = data.get("amount_refunded")
+        # amount_refunded minus its share of the charge discount: what the buyer gets back.
+        self.amount_refunded_net_discounts = data.get("amount_refunded_net_discounts")
         self.jamm_fee = data.get("jamm_fee")
         self.consumption_tax = data.get("consumption_tax")
         self.original_transaction_fee_waived = data.get(
